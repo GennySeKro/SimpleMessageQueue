@@ -29,7 +29,7 @@ public class MessageQueueService {
     /*
     主题到消息队列的映射
      */
-    private final Map<String, BlockingQueue<Message>> toppicQueues = new ConcurrentHashMap<>();
+    private final Map<String, BlockingQueue<Message>> topicQueues = new ConcurrentHashMap<>();
 
     /*
     读写锁保护主题队列的并发访问
@@ -67,7 +67,7 @@ public class MessageQueueService {
         List<Message> messageList = messageStorage.loadAllMessage();
         messageList.forEach(msg -> {
             if (!isExpired(msg)) {
-                toppicQueues.computeIfAbsent(msg.getTopic(), k -> new LinkedBlockingDeque<>())
+                topicQueues.computeIfAbsent(msg.getTopic(), k -> new LinkedBlockingDeque<>())
                         .offer(msg);
             }else {
                 messageStorage.deleteMessage(msg.getId());
@@ -85,8 +85,8 @@ public class MessageQueueService {
     public void createTopic(String topic) {
         lock.writeLock().lock();
         try {
-            if (!toppicQueues.containsKey(topic)){
-                toppicQueues.put(topic, new LinkedBlockingDeque<>());
+            if (!topicQueues.containsKey(topic)){
+                topicQueues.put(topic, new LinkedBlockingDeque<>());
                 log.info("创建主题：{}", topic);
             }
         }finally {
@@ -100,7 +100,7 @@ public class MessageQueueService {
     public void sendMessage(String topic, String content, long ttl){
         lock.readLock().lock();
         try {
-            BlockingQueue<Message> queue = toppicQueues.get(topic);
+            BlockingQueue<Message> queue = topicQueues.get(topic);
             if (queue == null){
                 throw new IllegalArgumentException("主题不存在：" + topic);
             }
@@ -117,7 +117,7 @@ public class MessageQueueService {
     接收消息
      */
     public Message receiveMessage(String topic, long timeout, TimeUnit unit, boolean autoAck) throws InterruptedException {
-        BlockingQueue<Message> queue = toppicQueues.get(topic);
+        BlockingQueue<Message> queue = topicQueues.get(topic);
         if (queue == null){
             throw new InterruptedException("主题不存在：" + topic);
         }
@@ -174,7 +174,7 @@ public class MessageQueueService {
         expiredMessage.forEach(msg -> {
             log.warn("消息 [{}] 确认超时， 重新入队", msg.getId());
             pendingAckMessage.remove(msg.getId());
-            toppicQueues.get(msg.getTopic()).offer(msg);
+            topicQueues.get(msg.getTopic()).offer(msg);
         });
     }
 
